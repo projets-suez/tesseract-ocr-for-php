@@ -41,16 +41,30 @@ class Process {
     {
         $running = true;
         $data = ["out" => "", "err" => ""];
-        while (($running === true) && !$this->hasTimedOut($timeout))
+        $timedOut = false;
+    
+        while (($running === true) && !($timedOut = $this->hasTimedOut($timeout)))
         {
             $data["out"] .= fread($this->stdout, 8192);
             $data["err"] .= fread($this->stderr, 8192);
             $procInfo = proc_get_status($this->handle);
             $running = $procInfo["running"];
             if ($running) {
-                usleep(1000); // Sleep 1ms to yield CPU time
+                usleep(1000);
             }
         }
+    
+        if ($timedOut) {
+            // kill process and children
+            $procInfo = proc_get_status($this->handle);
+            if ($procInfo["running"]) {
+                proc_terminate($this->handle, 9); // force with SIGKILL
+            }
+            $this->close(); // free all pipes
+            // in the wonderful world, it must throw Exception to inform parents 
+            // throw new \RuntimeException("Tesseract process timed out and was killed");
+        }
+    
         return $data;
     }
 
